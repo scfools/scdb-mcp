@@ -12,7 +12,7 @@
     "schema"
   ],
   "scripts": {
-    "build": "tsc && node scripts/fix-bindings-esm.mjs",
+    "build": "tsc && node scripts/fix-bindings-esm.mjs && chmod +x dist/src/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node dist/src/cli.js",
