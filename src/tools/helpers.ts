@@ -6,7 +6,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
-const PACKAGE_ROOT = resolve(dirname(__filename), '..', '..', '..');
+const PACKAGE_ROOT = resolve(dirname(__filename), '..', '..');
 const PKG_VERSION = JSON.parse(readFileSync(resolve(PACKAGE_ROOT, 'package.json'), 'utf-8')).version;
 
 /** JSON replacer that converts BigInt to string. */
