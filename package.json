@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "scdb-mcp": "./dist/src/cli.js"
+    "scdb-mcp": "dist/src/cli.js"
   },
   "files": [
     "dist",
