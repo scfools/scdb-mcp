@@ -80,7 +80,7 @@ export function registerCoordinationTools(server: McpServer, context: ServerCont
           severity,
           title,
           body,
-          parentId: parentId ?? null,
+          parentId: parentId ?? undefined,
         });
 
         return { content: [{ type: 'text' as const, text: `Message posted: ${id} (${messageType}/${severity})` }] };

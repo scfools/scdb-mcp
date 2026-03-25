@@ -92,11 +92,6 @@ async function runMcpServer(): Promise<void> {
 
   const server = createServer(context);
 
-  // Register tools (will be added in subsequent tasks)
-  // registerImportTool(server, context);
-  // registerQueryTool(server, context);
-  // ... etc
-
   // Start stdio transport
   const transport = new StdioServerTransport();
   await server.connect(transport);
