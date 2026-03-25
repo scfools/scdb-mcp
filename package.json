@@ -1,5 +1,5 @@
 {
-  "name": "@sc-fools/scdb-mcp",
+  "name": "@scfools/scdb-mcp",
   "version": "0.1.0",
   "type": "module",
   "bin": {
