@@ -60,7 +60,8 @@ export function registerCoordinationTools(server: McpServer, context: ServerCont
 
       try {
         await callReducer('post_coordination_message', [
-          id, sourceApp, messageType, severity, title, body, parentId ?? '',
+          id, sourceApp, messageType, severity, title, body,
+          parentId ? { some: parentId } : { none: [] },
         ]);
 
         return { content: [{ type: 'text' as const, text: `Message posted: ${id} (${messageType}/${severity})` }] };
