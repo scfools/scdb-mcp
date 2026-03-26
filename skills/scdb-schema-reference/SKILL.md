@@ -3,6 +3,10 @@ name: scdb-schema-reference
 description: SCDB table definitions, field semantics, reducer signatures, query examples. Reference for working with the shared SpacetimeDB instance.
 allowed-tools: Read
 argument-hint: [reference]
+mcp-servers:
+  scdb:
+    command: npx
+    args: ["@scfools/scdb-mcp"]
 ---
 
 # SCDB Schema Reference

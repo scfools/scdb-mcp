@@ -2,6 +2,10 @@
 name: scdb-import
 description: Import pre-parsed game data into scdb — preview diff, run import, verify results. Use after running the local pipeline to push updated data to the shared instance.
 allowed-tools: Bash, Read
+mcp-servers:
+  scdb:
+    command: npx
+    args: ["@scfools/scdb-mcp"]
 ---
 
 # SCDB Import

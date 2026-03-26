@@ -2,6 +2,10 @@
 name: scdb-pipeline-audit
 description: Validate data quality in the remote scdb instance — orphan components, bespoke leaks, count deltas, size mismatches. Use after an import to confirm data integrity.
 allowed-tools: Bash, Read
+mcp-servers:
+  scdb:
+    command: npx
+    args: ["@scfools/scdb-mcp"]
 ---
 
 # SCDB Pipeline Audit (Remote)

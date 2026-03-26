@@ -2,6 +2,10 @@
 name: scdb-coordination
 description: Session-start protocol for scdb — check pending coordination messages, review and respond, escalate breaking changes to human. Use at the start of each session.
 allowed-tools: Bash, Read
+mcp-servers:
+  scdb:
+    command: npx
+    args: ["@scfools/scdb-mcp"]
 ---
 
 # SCDB Coordination Protocol

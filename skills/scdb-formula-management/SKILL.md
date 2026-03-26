@@ -2,6 +2,10 @@
 name: scdb-formula-management
 description: Propose, update, and verify shared scdb formulas through the coordination protocol. Use when adding new calculations, changing existing ones, or verifying formula accuracy.
 allowed-tools: Bash, Read
+mcp-servers:
+  scdb:
+    command: npx
+    args: ["@scfools/scdb-mcp"]
 ---
 
 # SCDB Formula Management

@@ -2,6 +2,10 @@
 name: scdb-client-integration
 description: Wire a web app to consume data from scdb — TypeScript bindings, subscriptions, sync cursors, IndexedDB hydration. Use when building or updating a client that reads from the shared scdb instance.
 allowed-tools: Bash, Read, Write
+mcp-servers:
+  scdb:
+    command: npx
+    args: ["@scfools/scdb-mcp"]
 ---
 
 # SCDB Client Integration
