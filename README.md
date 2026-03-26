@@ -1,4 +1,4 @@
-# @sc-fools/scdb-mcp
+# @scfools/scdb-mcp
 
 MCP server for interacting with the shared Star Citizen data SpacetimeDB instance.
 
@@ -7,7 +7,7 @@ MCP server for interacting with the shared Star Citizen data SpacetimeDB instanc
 ### 1. Install skills
 
 ```bash
-npx @sc-fools/scdb-mcp install-skills
+npx @scfools/scdb-mcp install-skills
 ```
 
 ### 2. Add to Claude Code MCP config
@@ -17,7 +17,7 @@ npx @sc-fools/scdb-mcp install-skills
   "mcpServers": {
     "scdb": {
       "command": "npx",
-      "args": ["@sc-fools/scdb-mcp"]
+      "args": ["@scfools/scdb-mcp"]
     }
   }
 }

@@ -14,16 +14,18 @@ export interface SkillVersion {
   updatedAt: bigint;
 }
 
-/** Hash all .md files in a skills directory. Returns { skillName: sha256hex }. */
+/** Hash SKILL.md files in skill subdirectories. Returns { skillName: sha256hex }. */
 export function hashSkillFiles(skillsDir: string): Record<string, string> {
   const hashes: Record<string, string> = {};
   try {
-    for (const file of readdirSync(skillsDir)) {
-      if (!file.endsWith('.md')) continue;
-      const content = readFileSync(join(skillsDir, file), 'utf-8');
-      const hash = createHash('sha256').update(content).digest('hex');
-      const skillName = basename(file, '.md');
-      hashes[skillName] = hash;
+    for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const skillFile = join(skillsDir, entry.name, 'SKILL.md');
+      try {
+        const content = readFileSync(skillFile, 'utf-8');
+        const hash = createHash('sha256').update(content).digest('hex');
+        hashes[entry.name] = hash;
+      } catch {}
     }
   } catch {}
   return hashes;
@@ -74,5 +76,5 @@ export function buildSyncWarnings(
 export function formatSyncWarnings(warnings: string[], packageVersion: string): string {
   if (warnings.length === 0) return '';
   const lines = warnings.map(w => `  - ${w}`);
-  return `⚠ scdb-mcp v${packageVersion} sync warnings:\n${lines.join('\n')}\n\nRun \`npx @sc-fools/scdb-mcp update\` to pull latest.`;
+  return `⚠ scdb-mcp v${packageVersion} sync warnings:\n${lines.join('\n')}\n\nRun \`npx @scfools/scdb-mcp update\` to pull latest.`;
 }
