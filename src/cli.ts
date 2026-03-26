@@ -19,7 +19,7 @@ const SKILLS_DIR = resolve(PACKAGE_ROOT, 'skills');
 const BINDINGS_DIR = resolve(PACKAGE_ROOT, 'bindings');
 
 async function runInstallSkills(): Promise<void> {
-  const targetDir = resolve(process.cwd(), '.claude', 'skills', 'scdb');
+  const targetDir = resolve(process.cwd(), '.claude', 'skills');
   mkdirSync(targetDir, { recursive: true });
   cpSync(SKILLS_DIR, targetDir, { recursive: true });
   console.log(`Skills installed to ${targetDir}`);

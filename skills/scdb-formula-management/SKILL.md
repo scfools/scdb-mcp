@@ -1,7 +1,7 @@
 ---
 name: scdb-formula-management
 description: Propose, update, and verify shared scdb formulas through the coordination protocol. Use when adding new calculations, changing existing ones, or verifying formula accuracy.
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read
 ---
 
 # SCDB Formula Management

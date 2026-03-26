@@ -5,7 +5,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getConnection } from '../connection.js';
 import { discoverPaths } from '../discovery.js';
 import type { ServerContext } from '../types.js';
-import { prependSyncWarnings, oneShot, bigintReplacer, toCamelCase } from './helpers.js';
+import { prependSyncWarnings, oneShot, toCamelCase } from './helpers.js';
 
 const TABLE_FILES: Record<string, string> = {
   manufacturers: 'manufacturers.json',
@@ -31,6 +31,47 @@ function getPkField(tableName: string): string {
     ship_cargo: 'id',
   };
   return pkMap[tableName] ?? 'id';
+}
+
+/**
+ * Normalize a value for comparison: coerce strings/numbers/bigints to a
+ * canonical form so that "0" vs 0, "15.0" vs 15, and BigInt(3) vs 3 all
+ * compare as equal.
+ */
+export function normalizeValue(v: unknown): unknown {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'bigint') return Number(v);
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    // Try to interpret as a number — handles "0"/"1", "15.0", etc.
+    const n = Number(v);
+    if (!Number.isNaN(n) && v.trim() !== '') return n;
+    return v;
+  }
+  if (Array.isArray(v)) return v.map(normalizeValue);
+  if (typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      out[k] = normalizeValue(val);
+    }
+    return out;
+  }
+  return v;
+}
+
+/**
+ * Compare two records by the **intersection** of their keys.
+ * Returns true if the records match on all shared fields after normalization.
+ */
+export function recordsMatch(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const sharedKeys = Object.keys(a).filter(k => k in b);
+  if (sharedKeys.length === 0) return true;
+  for (const k of sharedKeys) {
+    const na = normalizeValue(a[k]);
+    const nb = normalizeValue(b[k]);
+    if (JSON.stringify(na) !== JSON.stringify(nb)) return false;
+  }
+  return true;
 }
 
 export function registerCompareTool(server: McpServer, context: ServerContext): void {
@@ -85,11 +126,8 @@ export function registerCompareTool(server: McpServer, context: ServerContext): 
           for (const [pk] of localByPk) {
             if (!remoteByPk.has(pk)) added++;
             else {
-              // Simple JSON comparison for change detection
-              const localJson = JSON.stringify(localByPk.get(pk), bigintReplacer);
-              const remoteJson = JSON.stringify(remoteByPk.get(pk), bigintReplacer);
-              if (localJson !== remoteJson) changed++;
-              else unchanged++;
+              if (recordsMatch(localByPk.get(pk)!, remoteByPk.get(pk)!)) unchanged++;
+              else changed++;
             }
           }
           for (const [pk] of remoteByPk) {

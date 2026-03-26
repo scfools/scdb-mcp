@@ -1,12 +1,14 @@
 ---
 name: scdb-import
 description: Import pre-parsed game data into scdb — preview diff, run import, verify results. Use after running the local pipeline to push updated data to the shared instance.
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read
 ---
 
 # SCDB Import
 
 Push locally parsed game data to the shared scdb instance. Always preview before importing.
+
+For table definitions and field semantics, invoke `/scdb-schema-reference`.
 
 ## Prerequisites
 

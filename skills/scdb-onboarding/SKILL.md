@@ -1,7 +1,7 @@
 ---
 name: scdb-onboarding
 description: First-run setup for scdb-mcp — discover local project, generate identity, check auth, run self_inventory, post introduction to coordination. Use on first connection to scdb.
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read
 ---
 
 # SCDB Onboarding

@@ -16,11 +16,12 @@ describe('sync-check', () => {
   });
 
   describe('hashSkillFiles', () => {
-    it('returns hash map for skill markdown files', () => {
+    it('returns hash map for skill subdirectories with SKILL.md', () => {
       const skillsDir = join(tempDir, 'skills');
-      mkdirSync(skillsDir);
-      writeFileSync(join(skillsDir, 'scdb-onboarding.md'), '# Onboarding');
-      writeFileSync(join(skillsDir, 'scdb-coordination.md'), '# Coordination');
+      mkdirSync(join(skillsDir, 'scdb-onboarding'), { recursive: true });
+      mkdirSync(join(skillsDir, 'scdb-coordination'), { recursive: true });
+      writeFileSync(join(skillsDir, 'scdb-onboarding', 'SKILL.md'), '# Onboarding');
+      writeFileSync(join(skillsDir, 'scdb-coordination', 'SKILL.md'), '# Coordination');
 
       const hashes = hashSkillFiles(skillsDir);
       expect(Object.keys(hashes)).toHaveLength(2);
@@ -28,11 +29,12 @@ describe('sync-check', () => {
       expect(hashes['scdb-coordination']).toMatch(/^[a-f0-9]{64}$/);
     });
 
-    it('ignores non-markdown files', () => {
+    it('ignores directories without SKILL.md', () => {
       const skillsDir = join(tempDir, 'skills');
-      mkdirSync(skillsDir);
-      writeFileSync(join(skillsDir, 'scdb-onboarding.md'), '# Onboarding');
-      writeFileSync(join(skillsDir, 'README.txt'), 'not a skill');
+      mkdirSync(join(skillsDir, 'scdb-onboarding'), { recursive: true });
+      mkdirSync(join(skillsDir, 'not-a-skill'), { recursive: true });
+      writeFileSync(join(skillsDir, 'scdb-onboarding', 'SKILL.md'), '# Onboarding');
+      writeFileSync(join(skillsDir, 'not-a-skill', 'README.txt'), 'not a skill');
 
       const hashes = hashSkillFiles(skillsDir);
       expect(Object.keys(hashes)).toHaveLength(1);

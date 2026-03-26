@@ -1,12 +1,14 @@
 ---
 name: scdb-pipeline-audit
 description: Validate data quality in the remote scdb instance — orphan components, bespoke leaks, count deltas, size mismatches. Use after an import to confirm data integrity.
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read
 ---
 
 # SCDB Pipeline Audit (Remote)
 
 Validate the data currently in the shared scdb instance for integrity. Adapted from the local pipeline-audit skill to work against the live database via MCP tools.
+
+For table definitions and field semantics, invoke `/scdb-schema-reference`.
 
 ## Step 1: Collect Record Counts
 
