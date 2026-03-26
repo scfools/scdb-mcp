@@ -47,8 +47,17 @@ describe('normalizeValue', () => {
     expect(normalizeValue(undefined)).toBe('');
   });
 
-  it('recursively normalizes arrays', () => {
-    expect(normalizeValue(['1', 2, '3.0'])).toEqual([1, 2, 3]);
+  it('joins flat string arrays into sorted CSV', () => {
+    expect(normalizeValue(['FlightController'])).toBe('FlightController');
+    expect(normalizeValue(['WeaponGun', 'FlightController'])).toBe('FlightController,WeaponGun');
+  });
+
+  it('joins flat numeric arrays into sorted CSV', () => {
+    expect(normalizeValue([3, 1, 2])).toBe('1,2,3');
+  });
+
+  it('recursively normalizes arrays of objects', () => {
+    expect(normalizeValue([{ a: '1' }])).toEqual([{ a: 1 }]);
   });
 
   it('recursively normalizes objects', () => {
@@ -91,6 +100,18 @@ describe('recordsMatch', () => {
     const local = { id: '1', name: 'Aurora' };
     const remote = { id: '1', name: 'Gladius' };
     expect(recordsMatch(local, remote)).toBe(false);
+  });
+
+  it('treats array and CSV string as equal', () => {
+    const local = { id: '1', types: ['FlightController'], categories: ['controller'] };
+    const remote = { id: '1', types: 'FlightController', categories: 'controller' };
+    expect(recordsMatch(local, remote)).toBe(true);
+  });
+
+  it('treats multi-element array and CSV string as equal regardless of order', () => {
+    const local = { id: '1', categories: ['WeaponGun', 'FlightController'] };
+    const remote = { id: '1', categories: 'FlightController,WeaponGun' };
+    expect(recordsMatch(local, remote)).toBe(true);
   });
 
   it('returns true when records have no shared keys', () => {

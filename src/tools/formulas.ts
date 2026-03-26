@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getConnection } from '../connection.js';
+import { sqlQuery } from '../connection.js';
 import type { ServerContext } from '../types.js';
-import { prependSyncWarnings, oneShot, bigintReplacer } from './helpers.js';
+import { prependSyncWarnings, bigintReplacer } from './helpers.js';
 
 export function registerFormulasTool(server: McpServer, context: ServerContext): void {
   server.tool(
@@ -13,20 +13,13 @@ export function registerFormulasTool(server: McpServer, context: ServerContext):
       domain: z.string().optional().describe('Filter by domain (e.g. "weapons", "thermal", "cargo")'),
     },
     async ({ name, domain }) => {
-      const conn = getConnection();
-      if (!conn) {
-        return { content: [{ type: 'text' as const, text: 'Error: not connected to scdb' }] };
-      }
-
       try {
-        const formulas: any[] = [];
-        await oneShot(conn, 'SELECT * FROM formulas', (ctx) => {
-          for (const row of ctx.db.formulas.iter()) {
-            const r = row as any;
-            if (name && r.id !== name && r.name !== name) continue;
-            if (domain && r.domain !== domain) continue;
-            formulas.push(r);
-          }
+        const allFormulas = await sqlQuery('SELECT * FROM formulas');
+
+        const formulas = allFormulas.filter((r: any) => {
+          if (name && r.id !== name && r.name !== name) return false;
+          if (domain && r.domain !== domain) return false;
+          return true;
         });
 
         const text = prependSyncWarnings(

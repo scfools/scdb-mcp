@@ -12,7 +12,7 @@ import type { ServerContext } from './types.js';
 export function createServer(context: ServerContext): McpServer {
   const server = new McpServer({
     name: 'scdb-mcp',
-    version: '0.1.0',
+    version: '2.0.0',
   });
 
   // Register all tools

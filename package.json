@@ -1,26 +1,24 @@
 {
   "name": "@scfools/scdb-mcp",
-  "version": "0.3.0",
+  "version": "2.0.0",
   "type": "module",
   "bin": {
     "scdb-mcp": "dist/src/cli.js"
   },
   "files": [
     "dist",
-    "bindings",
     "skills",
     "schema"
   ],
   "scripts": {
-    "build": "tsc && node scripts/fix-bindings-esm.mjs && chmod +x dist/src/cli.js",
+    "build": "tsc && chmod +x dist/src/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node dist/src/cli.js",
     "prepublishOnly": "npm run build && npm run test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.0",
-    "spacetimedb": "^2.1.0"
+    "@modelcontextprotocol/sdk": "^1.27.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

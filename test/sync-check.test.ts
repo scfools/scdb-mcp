@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { hashSkillFiles, loadBindingsVersion, buildSyncWarnings } from '../src/sync-check.js';
+import { hashSkillFiles, buildSyncWarnings } from '../src/sync-check.js';
 
 describe('sync-check', () => {
   let tempDir: string;
@@ -41,32 +41,12 @@ describe('sync-check', () => {
     });
   });
 
-  describe('loadBindingsVersion', () => {
-    it('reads .bindings-version JSON', () => {
-      const bindingsDir = join(tempDir, 'bindings');
-      mkdirSync(bindingsDir);
-      writeFileSync(join(bindingsDir, '.bindings-version'), JSON.stringify({
-        schemaHash: 'abc123',
-        generatedAt: '2026-03-24T00:00:00Z',
-      }));
-
-      const result = loadBindingsVersion(bindingsDir);
-      expect(result?.schemaHash).toBe('abc123');
-    });
-
-    it('returns null when file missing', () => {
-      expect(loadBindingsVersion(join(tempDir, 'nonexistent'))).toBeNull();
-    });
-  });
-
   describe('buildSyncWarnings', () => {
     it('returns empty array when everything matches', () => {
       const localHashes = { 'scdb-onboarding': 'aaa' };
       const remoteHashes = [{ skillName: 'scdb-onboarding', contentHash: 'aaa', updatedAt: BigInt(0) }];
-      const localBindingsHash = 'bbb';
-      const remoteDataHash = 'bbb';
 
-      const warnings = buildSyncWarnings(localHashes, remoteHashes, localBindingsHash, remoteDataHash);
+      const warnings = buildSyncWarnings(localHashes, remoteHashes, null, null);
       expect(warnings).toHaveLength(0);
     });
 
@@ -74,15 +54,14 @@ describe('sync-check', () => {
       const localHashes = { 'scdb-onboarding': 'aaa' };
       const remoteHashes = [{ skillName: 'scdb-onboarding', contentHash: 'bbb', updatedAt: BigInt(0) }];
 
-      const warnings = buildSyncWarnings(localHashes, remoteHashes, 'x', 'x');
+      const warnings = buildSyncWarnings(localHashes, remoteHashes, null, null);
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('scdb-onboarding');
     });
 
-    it('warns on bindings hash mismatch', () => {
+    it('does not warn on bindings hash (no longer checked)', () => {
       const warnings = buildSyncWarnings({}, [], 'old', 'new');
-      expect(warnings).toHaveLength(1);
-      expect(warnings[0]).toContain('bindings');
+      expect(warnings).toHaveLength(0);
     });
   });
 });

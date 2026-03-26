@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getConnection } from '../connection.js';
+import { sqlQuery } from '../connection.js';
 import type { ServerContext } from '../types.js';
-import { prependSyncWarnings, oneShot, bigintReplacer, toCamelCase } from './helpers.js';
+import { prependSyncWarnings, bigintReplacer } from './helpers.js';
 
 export function registerQueryTool(server: McpServer, context: ServerContext): void {
   server.tool(
@@ -14,27 +14,13 @@ export function registerQueryTool(server: McpServer, context: ServerContext): vo
       limit: z.number().optional().describe('Max rows to return (default: 100)'),
     },
     async ({ table, where, limit }) => {
-      const conn = getConnection();
-      if (!conn) {
-        return { content: [{ type: 'text' as const, text: 'Error: not connected to scdb' }] };
-      }
-
       const maxRows = limit ?? 100;
       let query = `SELECT * FROM ${table}`;
       if (where) query += ` WHERE ${where}`;
 
       try {
-        const rows: any[] = [];
-        await oneShot(conn, query, (ctx) => {
-          const tableAccessor = (ctx.db as any)[toCamelCase(table)];
-          if (!tableAccessor) throw new Error(`Table "${table}" not found.`);
-          let count = 0;
-          for (const row of tableAccessor.iter()) {
-            if (count >= maxRows) break;
-            rows.push(row);
-            count++;
-          }
-        });
+        let rows = await sqlQuery(query);
+        rows = rows.slice(0, maxRows);
 
         const text = prependSyncWarnings(
           JSON.stringify(rows, bigintReplacer, 2),

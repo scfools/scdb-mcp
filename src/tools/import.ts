@@ -3,21 +3,20 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { createHash } from 'crypto';
 import { resolve } from 'path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getConnection } from '../connection.js';
+import { sqlQuery, callReducer } from '../connection.js';
 import { requireAuth } from '../auth.js';
 import { discoverPaths } from '../discovery.js';
 import type { ServerContext } from '../types.js';
-import { oneShot } from './helpers.js';
 
 const TABLES = [
-  { file: 'manufacturers.json',          reducer: 'importManufacturers',          stdbTable: 'manufacturers' },
-  { file: 'ships.json',                  reducer: 'importShips',                  stdbTable: 'ships' },
-  { file: 'components.json',             reducer: 'importComponents',             stdbTable: 'components' },
-  { file: 'ship_hardpoints.json',        reducer: 'importShipHardpoints',         stdbTable: 'ship_hardpoints' },
-  { file: 'hardpoint_compat.json',       reducer: 'importHardpointCompatibility', stdbTable: 'hardpoint_compatibility' },
-  { file: 'ship_defaults.json',          reducer: 'importShipDefaults',           stdbTable: 'ship_defaults' },
-  { file: 'inventory_containers.json',   reducer: 'importInventoryContainers',    stdbTable: 'inventory_containers' },
-  { file: 'ship_cargo.json',             reducer: 'importShipCargo',              stdbTable: 'ship_cargo' },
+  { file: 'manufacturers.json',          reducer: 'import_manufacturers',          stdbTable: 'manufacturers' },
+  { file: 'ships.json',                  reducer: 'import_ships',                  stdbTable: 'ships' },
+  { file: 'components.json',             reducer: 'import_components',             stdbTable: 'components' },
+  { file: 'ship_hardpoints.json',        reducer: 'import_ship_hardpoints',        stdbTable: 'ship_hardpoints' },
+  { file: 'hardpoint_compat.json',       reducer: 'import_hardpoint_compatibility', stdbTable: 'hardpoint_compatibility' },
+  { file: 'ship_defaults.json',          reducer: 'import_ship_defaults',          stdbTable: 'ship_defaults' },
+  { file: 'inventory_containers.json',   reducer: 'import_inventory_containers',   stdbTable: 'inventory_containers' },
+  { file: 'ship_cargo.json',             reducer: 'import_ship_cargo',             stdbTable: 'ship_cargo' },
 ] as const;
 
 function getGameVersion(p4kDir: string | null): string {
@@ -56,11 +55,6 @@ export function registerImportTool(server: McpServer, context: ServerContext): v
         return { content: [{ type: 'text' as const, text: authError }] };
       }
 
-      const conn = getConnection();
-      if (!conn) {
-        return { content: [{ type: 'text' as const, text: 'Error: not connected to scdb' }] };
-      }
-
       const paths = discoverPaths();
       if (!paths.dataDir) {
         return { content: [{ type: 'text' as const, text: 'Error: Could not find parsed STDB data. Expected at `*/parsed/stdb/` or set `SCDB_DATA_DIR`.' }] };
@@ -92,36 +86,26 @@ export function registerImportTool(server: McpServer, context: ServerContext): v
         const hash = createHash('sha256').update(sortedContent).digest('hex');
 
         // Get current versionSeq
-        let currentSeq = BigInt(0);
-        await oneShot(conn, 'SELECT * FROM data_version', (ctx) => {
-          for (const row of ctx.db.dataVersion.iter()) {
-            currentSeq = (row as any).versionSeq;
-          }
-        });
+        const dataVersionRows = await sqlQuery('SELECT * FROM data_version');
+        let currentSeq = 0;
+        if (dataVersionRows.length > 0) {
+          currentSeq = Number((dataVersionRows[0] as any).versionSeq ?? 0);
+        }
 
-        const newSeq = currentSeq + BigInt(1);
+        const newSeq = currentSeq + 1;
 
         // Call import reducers
         for (const t of TABLES) {
           const data = fileContents.get(t.file)!;
-          (conn.reducers as any)[t.reducer]({ data, expectedSeq: newSeq });
+          await callReducer(t.reducer, [data, newSeq]);
         }
 
         // Set data version
         const resolvedGameVersion = gameVersion ?? getGameVersion(paths.p4kDir);
-        conn.reducers.setDataVersion({
-          hash,
-          gameVersion: resolvedGameVersion,
-          expectedSeq: newSeq,
-          counts: JSON.stringify(counts),
-          changeCount: BigInt(0),
-        });
+        await callReducer('set_data_version', [hash, resolvedGameVersion, newSeq, JSON.stringify(counts), 0]);
 
         // Prune changelog
-        conn.reducers.pruneChangelog({ keepVersions: BigInt(4) });
-
-        // Wait for reducers to process
-        await new Promise(r => setTimeout(r, 3000));
+        await callReducer('prune_changelog', [4]);
 
         const text = [
           `Import complete (versionSeq: ${newSeq})`,

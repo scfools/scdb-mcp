@@ -2,10 +2,10 @@ import { z } from 'zod';
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getConnection } from '../connection.js';
+import { sqlQuery } from '../connection.js';
 import { discoverPaths } from '../discovery.js';
 import type { ServerContext } from '../types.js';
-import { prependSyncWarnings, oneShot, toCamelCase } from './helpers.js';
+import { prependSyncWarnings } from './helpers.js';
 
 const TABLE_FILES: Record<string, string> = {
   manufacturers: 'manufacturers.json',
@@ -48,7 +48,13 @@ export function normalizeValue(v: unknown): unknown {
     if (!Number.isNaN(n) && v.trim() !== '') return n;
     return v;
   }
-  if (Array.isArray(v)) return v.map(normalizeValue);
+  if (Array.isArray(v)) {
+    // Flat arrays of primitives → sort and join as CSV for canonical comparison
+    if (v.every(el => typeof el === 'string' || typeof el === 'number')) {
+      return v.map(el => String(el)).sort().join(',');
+    }
+    return v.map(normalizeValue);
+  }
   if (typeof v === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
@@ -82,11 +88,6 @@ export function registerCompareTool(server: McpServer, context: ServerContext): 
       table: z.string().optional().describe('Specific table to compare (default: all tables)'),
     },
     async ({ table }) => {
-      const conn = getConnection();
-      if (!conn) {
-        return { content: [{ type: 'text' as const, text: 'Error: not connected to scdb' }] };
-      }
-
       const paths = discoverPaths();
       if (!paths.dataDir) {
         return { content: [{ type: 'text' as const, text: 'Error: Could not find parsed STDB data. Expected at `*/parsed/stdb/` or set `SCDB_DATA_DIR`.' }] };
@@ -111,15 +112,8 @@ export function registerCompareTool(server: McpServer, context: ServerContext): 
           const pkField = getPkField(tableName);
           const localByPk = new Map(localRecords.map(r => [String(r[pkField]), r]));
 
-          // Fetch remote
-          const remoteRecords: any[] = [];
-          await oneShot(conn, `SELECT * FROM ${tableName}`, (ctx) => {
-            const accessor = (ctx.db as any)[toCamelCase(tableName)];
-            if (accessor) {
-              for (const row of accessor.iter()) remoteRecords.push(row);
-            }
-          });
-
+          // Fetch remote via HTTP SQL
+          const remoteRecords = await sqlQuery(`SELECT * FROM ${tableName}`);
           const remoteByPk = new Map(remoteRecords.map((r: any) => [String(r[pkField]), r]));
 
           let added = 0, removed = 0, changed = 0, unchanged = 0;

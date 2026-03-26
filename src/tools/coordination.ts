@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getConnection } from '../connection.js';
+import { sqlQuery, callReducer } from '../connection.js';
 import { requireAuth } from '../auth.js';
 import type { ServerContext } from '../types.js';
-import { prependSyncWarnings, oneShot, bigintReplacer } from './helpers.js';
+import { prependSyncWarnings, bigintReplacer } from './helpers.js';
 
 const MESSAGE_TYPES = [
   'delta_report', 'schema_proposal', 'pipeline_change',
@@ -19,27 +19,18 @@ export function registerCoordinationTools(server: McpServer, context: ServerCont
     'Returns pending/active coordination messages, current phase, agreed/pending items. Session-start check for Claude.',
     {},
     async () => {
-      const conn = getConnection();
-      if (!conn) {
-        return { content: [{ type: 'text' as const, text: 'Error: not connected to scdb' }] };
-      }
-
       try {
-        const result: any = { messages: [], state: null };
         const terminalStatuses = new Set(['resolved', 'rejected', 'closed']);
 
-        // Subscribe to each table separately
-        await oneShot(conn, 'SELECT * FROM coordination_messages', (ctx) => {
-          for (const row of ctx.db.coordinationMessages.iter()) {
-            const r = row as any;
-            if (!terminalStatuses.has(r.status)) result.messages.push(r);
-          }
-        });
+        const [allMessages, stateRows] = await Promise.all([
+          sqlQuery('SELECT * FROM coordination_messages'),
+          sqlQuery('SELECT * FROM coordination_state'),
+        ]);
 
-        await oneShot(conn, 'SELECT * FROM coordination_state', (ctx) => {
-          for (const row of ctx.db.coordinationState.iter()) result.state = row;
-        });
+        const messages = allMessages.filter((r: any) => !terminalStatuses.has(r.status));
+        const state = stateRows[0] ?? null;
 
+        const result = { messages, state };
         const text = prependSyncWarnings(JSON.stringify(result, bigintReplacer, 2), context);
         return { content: [{ type: 'text' as const, text }] };
       } catch (err: any) {
@@ -67,21 +58,10 @@ export function registerCoordinationTools(server: McpServer, context: ServerCont
         return { content: [{ type: 'text' as const, text: authError }] };
       }
 
-      const conn = getConnection();
-      if (!conn) {
-        return { content: [{ type: 'text' as const, text: 'Error: not connected to scdb' }] };
-      }
-
       try {
-        conn.reducers.postCoordinationMessage({
-          id,
-          sourceApp,
-          messageType,
-          severity,
-          title,
-          body,
-          parentId: parentId ?? undefined,
-        });
+        await callReducer('post_coordination_message', [
+          id, sourceApp, messageType, severity, title, body, parentId ?? '',
+        ]);
 
         return { content: [{ type: 'text' as const, text: `Message posted: ${id} (${messageType}/${severity})` }] };
       } catch (err: any) {
@@ -98,18 +78,8 @@ export function registerCoordinationTools(server: McpServer, context: ServerCont
       messageId: z.string().describe('Root message ID to get the thread for'),
     },
     async ({ messageId }) => {
-      const conn = getConnection();
-      if (!conn) {
-        return { content: [{ type: 'text' as const, text: 'Error: not connected to scdb' }] };
-      }
-
       try {
-        const allMessages: any[] = [];
-        await oneShot(conn, 'SELECT * FROM coordination_messages', (ctx) => {
-          for (const row of ctx.db.coordinationMessages.iter()) {
-            allMessages.push(row);
-          }
-        });
+        const allMessages = await sqlQuery('SELECT * FROM coordination_messages');
 
         // Build thread: find root + all descendants
         const thread: any[] = [];
@@ -120,12 +90,12 @@ export function registerCoordinationTools(server: McpServer, context: ServerCont
           const replies = allMessages.filter((m: any) => m.parentId === parentId);
           for (const reply of replies) {
             thread.push(reply);
-            collectReplies(reply.id);
+            collectReplies(reply.id as string);
           }
         };
         collectReplies(messageId);
 
-        thread.sort((a, b) => Number(a.createdAt - b.createdAt));
+        thread.sort((a: any, b: any) => Number(a.createdAt) - Number(b.createdAt));
 
         const text = thread.length === 0
           ? `No messages found for thread "${messageId}".`

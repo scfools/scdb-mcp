@@ -1,12 +1,6 @@
-import { readFileSync, readdirSync, existsSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { createHash } from 'crypto';
-import { join, basename } from 'path';
-
-export interface BindingsVersion {
-  schemaHash: string;
-  generatedAt: string;
-  cliVersion?: string;
-}
+import { join } from 'path';
 
 export interface SkillVersion {
   skillName: string;
@@ -31,23 +25,12 @@ export function hashSkillFiles(skillsDir: string): Record<string, string> {
   return hashes;
 }
 
-/** Load the .bindings-version file from the bindings directory. */
-export function loadBindingsVersion(bindingsDir: string): BindingsVersion | null {
-  const versionPath = join(bindingsDir, '.bindings-version');
-  try {
-    if (!existsSync(versionPath)) return null;
-    return JSON.parse(readFileSync(versionPath, 'utf-8'));
-  } catch {
-    return null;
-  }
-}
-
 /** Compare local state against remote state and return warning strings. */
 export function buildSyncWarnings(
   localSkillHashes: Record<string, string>,
   remoteSkillVersions: SkillVersion[],
-  localBindingsHash: string | null,
-  remoteDataHash: string | null,
+  _localBindingsHash: string | null,
+  _remoteDataHash: string | null,
 ): string[] {
   const warnings: string[] = [];
 
@@ -60,13 +43,6 @@ export function buildSyncWarnings(
         `skill "${name}" local hash differs from scdb (local: ${localHash.slice(0, 8)}, remote: ${remoteHash.slice(0, 8)})`
       );
     }
-  }
-
-  // Check bindings version
-  if (localBindingsHash && remoteDataHash && localBindingsHash !== remoteDataHash) {
-    warnings.push(
-      `bindings may be stale: generated for schema "${localBindingsHash.slice(0, 8)}", scdb is at "${remoteDataHash.slice(0, 8)}"`
-    );
   }
 
   return warnings;

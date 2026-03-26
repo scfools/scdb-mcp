@@ -1,7 +1,6 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve } from 'path';
 import { homedir } from 'os';
-import { DbConnection } from '../bindings/index.js';
 
 const DEFAULT_TOKEN_DIR = resolve(homedir(), '.config', 'scdb-mcp');
 const TOKEN_FILENAME = 'token';
@@ -39,51 +38,110 @@ export function getConnectionConfig(): ConnectionConfig {
   };
 }
 
-/** Shared connection state for the MCP server session. */
-let activeConnection: DbConnection | null = null;
-let activeIdentity: string | null = null;
+// --- HTTP API client ---
 
-export function getConnection(): DbConnection | null {
-  return activeConnection;
+interface StdbConfig {
+  baseUrl: string;
+  module: string;
+  token: string | undefined;
+  identityHex: string | undefined;
+}
+
+let config: StdbConfig | null = null;
+
+/** Parse identity from JWT token without external deps. */
+export function parseIdentityFromToken(token: string): string | null {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+    return payload.hex_identity ?? null;
+  } catch { return null; }
+}
+
+/** Initialize the HTTP config from env vars and stored token. */
+export function initConfig(connConfig?: ConnectionConfig): StdbConfig {
+  const { uri, module: moduleName } = connConfig ?? getConnectionConfig();
+  const token = loadToken();
+  const identityHex = token ? parseIdentityFromToken(token) : undefined;
+
+  config = {
+    baseUrl: uri!,
+    module: moduleName!,
+    token: token ?? undefined,
+    identityHex: identityHex ?? undefined,
+  };
+
+  return config;
+}
+
+export function getConfig(): StdbConfig {
+  if (!config) throw new Error('initConfig() must be called before getConfig()');
+  return config;
 }
 
 export function getIdentity(): string | null {
-  return activeIdentity;
+  return config?.identityHex ?? null;
 }
 
-export async function connect(config?: ConnectionConfig): Promise<DbConnection> {
-  if (activeConnection) return activeConnection;
+// --- Snake to camelCase ---
 
-  const { uri, module: moduleName } = config ?? getConnectionConfig();
-  const storedToken = loadToken();
+function snakeToCamel(s: string): string {
+  return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
 
-  return new Promise<DbConnection>((resolve, reject) => {
-    const builder = DbConnection.builder()
-      .withUri(uri!)
-      .withDatabaseName(moduleName!);
+// --- STDB response parsing ---
 
-    if (storedToken) {
-      builder.withToken(storedToken);
-    }
-
-    builder
-      .onConnect((ctx, identity, token) => {
-        saveToken(token);
-        activeIdentity = identity.toHexString();
-        activeConnection = ctx;
-        resolve(ctx);
-      })
-      .onConnectError((_ctx, error) => {
-        reject(error);
-      })
-      .build();
+function parseStdbResponse(response: any[]): Record<string, unknown>[] {
+  if (!response.length) return [];
+  const { schema, rows } = response[0];
+  if (!rows || !rows.length) return [];
+  const columns: string[] = schema.elements.map((e: any) => snakeToCamel(e.name.some));
+  return rows.map((row: any[]) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col: string, i: number) => { obj[col] = row[i]; });
+    return obj;
   });
 }
 
-export function disconnect(): void {
-  if (activeConnection) {
-    activeConnection.disconnect();
-    activeConnection = null;
-    activeIdentity = null;
+/** Execute a SQL query against STDB, returns array of objects with camelCase keys. */
+export async function sqlQuery(query: string): Promise<Record<string, unknown>[]> {
+  const cfg = getConfig();
+  const url = `${cfg.baseUrl}/v1/database/${cfg.module}/sql`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: query,
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`STDB SQL query failed (${res.status}): ${body}`);
+  }
+
+  const json = await res.json();
+  return parseStdbResponse(json);
+}
+
+/** Call a reducer with positional args. */
+export async function callReducer(name: string, args: unknown[]): Promise<void> {
+  const cfg = getConfig();
+  if (!cfg.token) {
+    throw new Error('No token available. Cannot call reducer without authentication.');
+  }
+
+  const url = `${cfg.baseUrl}/v1/database/${cfg.module}/call/${name}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${cfg.token}`,
+    },
+    body: JSON.stringify(args),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`STDB reducer "${name}" failed (${res.status}): ${body}`);
   }
 }

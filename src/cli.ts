@@ -2,8 +2,8 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
-import { connect, getIdentity } from './connection.js';
-import { hashSkillFiles, loadBindingsVersion, buildSyncWarnings } from './sync-check.js';
+import { initConfig, getIdentity, sqlQuery } from './connection.js';
+import { hashSkillFiles, buildSyncWarnings } from './sync-check.js';
 import { checkAuth, type Publisher } from './auth.js';
 import { cpSync, mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
 import { resolve, dirname, join } from 'path';
@@ -16,7 +16,6 @@ const __dirname = dirname(__filename);
 // Resolve package root (two levels up from dist/src/)
 const PACKAGE_ROOT = resolve(__dirname, '..', '..');
 const SKILLS_DIR = resolve(PACKAGE_ROOT, 'skills');
-const BINDINGS_DIR = resolve(PACKAGE_ROOT, 'bindings');
 
 /** Extract mcp-servers from SKILL.md frontmatter. */
 function parseMcpServers(skillContent: string): Record<string, Record<string, unknown>> {
@@ -127,59 +126,42 @@ async function runInstallSkills(): Promise<void> {
 }
 
 async function runMcpServer(): Promise<void> {
-  // Connect to scdb
-  const conn = await connect();
-  const identityHex = getIdentity()!;
+  // Initialize HTTP config (loads token, parses identity from JWT)
+  initConfig();
+  const identityHex = getIdentity();
 
-  // Check auth
+  // Check auth via SQL query
   let isAuthorized = false;
-  await new Promise<void>((resolve) => {
-    conn.subscriptionBuilder()
-      .onApplied((ctx) => {
-        const publishers: Publisher[] = [];
-        for (const row of ctx.db.authorizedPublishers.iter()) {
-          publishers.push(row as Publisher);
-        }
-        isAuthorized = checkAuth(identityHex, publishers);
-        resolve();
-      })
-      .subscribe('SELECT * FROM authorized_publishers');
-  });
+  try {
+    const publishers = await sqlQuery('SELECT * FROM authorized_publishers') as unknown as Publisher[];
+    isAuthorized = identityHex ? checkAuth(identityHex, publishers) : false;
+  } catch {
+    // If auth check fails, proceed as unauthorized
+  }
 
   // Run sync check
   const localSkillHashes = hashSkillFiles(SKILLS_DIR);
-  const bindingsVersion = loadBindingsVersion(BINDINGS_DIR);
 
   let remoteSkillVersions: any[] = [];
   let remoteDataHash: string | null = null;
 
-  // Subscribe to each table separately (STDB SDK does not support multi-query subscribes)
-  await new Promise<void>((resolve) => {
-    conn.subscriptionBuilder()
-      .onApplied((ctx) => {
-        for (const row of ctx.db.skillVersions.iter()) {
-          remoteSkillVersions.push(row);
-        }
-        resolve();
-      })
-      .subscribe('SELECT * FROM skill_versions');
-  });
-
-  await new Promise<void>((resolve) => {
-    conn.subscriptionBuilder()
-      .onApplied((ctx) => {
-        for (const row of ctx.db.dataVersion.iter()) {
-          remoteDataHash = (row as any).hash;
-        }
-        resolve();
-      })
-      .subscribe('SELECT * FROM data_version');
-  });
+  try {
+    const [skillVersionRows, dataVersionRows] = await Promise.all([
+      sqlQuery('SELECT * FROM skill_versions'),
+      sqlQuery('SELECT * FROM data_version'),
+    ]);
+    remoteSkillVersions = skillVersionRows as any[];
+    if (dataVersionRows.length > 0) {
+      remoteDataHash = (dataVersionRows[0] as any).hash ?? null;
+    }
+  } catch {
+    // If sync check fails, proceed with empty warnings
+  }
 
   const syncWarnings = buildSyncWarnings(
     localSkillHashes,
     remoteSkillVersions,
-    bindingsVersion?.schemaHash ?? null,
+    null, // no bindings hash — HTTP API, no bindings
     remoteDataHash,
   );
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getConnection } from '../connection.js';
+import { callReducer } from '../connection.js';
 import { requireAuth } from '../auth.js';
 import type { ServerContext } from '../types.js';
 
@@ -18,16 +18,8 @@ export function registerAdminTools(server: McpServer, context: ServerContext): v
         return { content: [{ type: 'text' as const, text: authError }] };
       }
 
-      const conn = getConnection();
-      if (!conn) {
-        return { content: [{ type: 'text' as const, text: 'Error: not connected to scdb' }] };
-      }
-
       try {
-        conn.reducers.addAuthorizedPublisher({ identity, label });
-
-        // Wait for reducer to process
-        await new Promise(r => setTimeout(r, 1000));
+        await callReducer('add_authorized_publisher', [identity, label]);
 
         return {
           content: [{

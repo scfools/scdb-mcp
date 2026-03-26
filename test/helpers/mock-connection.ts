@@ -1,47 +1,43 @@
 import { vi } from 'vitest';
 
 /**
- * Creates a mock DbConnection-like object for tool tests.
- * Tools interact with the connection through subscriptions and reducers.
+ * Mock setup for HTTP-based STDB client.
+ * Tools now use sqlQuery() and callReducer() instead of DbConnection subscriptions.
  */
-export function createMockConnection(tableData: Record<string, any[]> = {}) {
-  const reducerCalls: { name: string; args: any }[] = [];
 
-  const mockConn = {
-    subscriptionBuilder: () => ({
-      onApplied: (cb: Function) => ({
-        subscribe: (query: string) => {
-          // Extract table name from "SELECT * FROM table_name"
-          const match = query.match(/FROM\s+(\w+)/i);
-          const tableName = match?.[1] ?? '';
-          // Find camelCase accessor name for this snake_case table
-          const camelName = tableName.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
-          const rows = tableData[camelName] ?? tableData[tableName] ?? [];
+/** Track reducer calls made via callReducer. */
+export interface ReducerCall {
+  name: string;
+  args: unknown[];
+}
 
-          const mockCtx = {
-            db: new Proxy({}, {
-              get: (_target, prop: string) => ({
-                iter: () => rows[Symbol.iterator](),
-                // PK accessor pattern
-                find: (key: any) => rows.find((r: any) => Object.values(r)[0] === key),
-              }),
-            }),
-          };
+const reducerCalls: ReducerCall[] = [];
+let tableData: Record<string, Record<string, unknown>[]> = {};
 
-          // Simulate async subscription callback
-          Promise.resolve().then(() => cb(mockCtx));
-        },
-      }),
-    }),
-    reducers: new Proxy({}, {
-      get: (_target, prop: string) => {
-        return (args: any) => {
-          reducerCalls.push({ name: prop, args });
-        };
-      },
-    }),
-    disconnect: vi.fn(),
-  };
+/** Configure mock table data (keyed by snake_case table name). */
+export function setMockTableData(data: Record<string, Record<string, unknown>[]>): void {
+  tableData = data;
+}
 
-  return { conn: mockConn as any, reducerCalls };
+/** Get all reducer calls made during the test. */
+export function getReducerCalls(): ReducerCall[] {
+  return reducerCalls;
+}
+
+/** Clear state between tests. */
+export function resetMocks(): void {
+  reducerCalls.length = 0;
+  tableData = {};
+}
+
+/** Mock sqlQuery: extracts table name from SQL and returns matching mock data. */
+export async function mockSqlQuery(query: string): Promise<Record<string, unknown>[]> {
+  const match = query.match(/FROM\s+(\w+)/i);
+  const tableName = match?.[1] ?? '';
+  return tableData[tableName] ?? [];
+}
+
+/** Mock callReducer: records the call for assertions. */
+export async function mockCallReducer(name: string, args: unknown[]): Promise<void> {
+  reducerCalls.push({ name, args });
 }
