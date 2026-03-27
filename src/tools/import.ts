@@ -94,10 +94,30 @@ export function registerImportTool(server: McpServer, context: ServerContext): v
 
         const newSeq = currentSeq + 1;
 
-        // Call import reducers
+        // Call import reducers (chunk large payloads to stay under HTTP body limit)
+        const MAX_PAYLOAD_BYTES = 900_000; // ~900KB safe limit
         for (const t of TABLES) {
           const data = fileContents.get(t.file)!;
-          await callReducer(t.reducer, [data, newSeq]);
+          if (data.length <= MAX_PAYLOAD_BYTES) {
+            await callReducer(t.reducer, [data, newSeq]);
+          } else {
+            const records = JSON.parse(data);
+            let chunk: any[] = [];
+            let chunkSize = 2; // account for []
+            for (const rec of records) {
+              const recStr = JSON.stringify(rec);
+              if (chunkSize + recStr.length + 1 > MAX_PAYLOAD_BYTES && chunk.length > 0) {
+                await callReducer(t.reducer, [JSON.stringify(chunk), newSeq]);
+                chunk = [];
+                chunkSize = 2;
+              }
+              chunk.push(rec);
+              chunkSize += recStr.length + 1;
+            }
+            if (chunk.length > 0) {
+              await callReducer(t.reducer, [JSON.stringify(chunk), newSeq]);
+            }
+          }
         }
 
         // Set data version
