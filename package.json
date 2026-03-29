@@ -1,6 +1,6 @@
 {
   "name": "@scfools/scdb-mcp",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "type": "module",
   "bin": {
     "scdb-mcp": "dist/src/cli.js"
