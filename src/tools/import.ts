@@ -95,19 +95,22 @@ export function registerImportTool(server: McpServer, context: ServerContext): v
         const newSeq = currentSeq + 1;
 
         // Call import reducers (chunk large payloads to stay under HTTP body limit)
+        // skipDeletes: 0 = full diff (small tables), 1 = insert/update only (chunked)
         const MAX_PAYLOAD_BYTES = 900_000; // ~900KB safe limit
         for (const t of TABLES) {
           const data = fileContents.get(t.file)!;
           if (data.length <= MAX_PAYLOAD_BYTES) {
-            await callReducer(t.reducer, [data, newSeq]);
+            await callReducer(t.reducer, [data, newSeq, 0]);
           } else {
+            // Clear table first, then send chunks with skipDeletes=1
+            await callReducer(t.reducer, [JSON.stringify([]), newSeq, 0]);
             const records = JSON.parse(data);
             let chunk: any[] = [];
             let chunkSize = 2; // account for []
             for (const rec of records) {
               const recStr = JSON.stringify(rec);
               if (chunkSize + recStr.length + 1 > MAX_PAYLOAD_BYTES && chunk.length > 0) {
-                await callReducer(t.reducer, [JSON.stringify(chunk), newSeq]);
+                await callReducer(t.reducer, [JSON.stringify(chunk), newSeq, 1]);
                 chunk = [];
                 chunkSize = 2;
               }
@@ -115,7 +118,7 @@ export function registerImportTool(server: McpServer, context: ServerContext): v
               chunkSize += recStr.length + 1;
             }
             if (chunk.length > 0) {
-              await callReducer(t.reducer, [JSON.stringify(chunk), newSeq]);
+              await callReducer(t.reducer, [JSON.stringify(chunk), newSeq, 1]);
             }
           }
         }
